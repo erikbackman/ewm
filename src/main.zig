@@ -5,8 +5,8 @@ var shouldQuit = false;
 
 var winX: i32 = 0;
 var winY: i32 = 0;
-var winW: u32 = 0;
-var winH: u32 = 0;
+var winW: i32 = 0;
+var winH: i32 = 0;
 
 var sw: c_int = 0;
 var sh: c_int = 0;
@@ -82,6 +82,15 @@ fn onMapRequest(event: *C.XEvent) void {
     _ = C.XResizeWindow(display, window, 1000, 1000);
     _ = C.XSetWindowBorderWidth(display, window, 4);
 
+    // TODO
+    var attributes: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, window, &attributes);
+    winW = attributes.width;
+    winH = attributes.height;
+    winX = attributes.x;
+    winY = attributes.y;
+    //
+
     curr = @constCast(&window);
     winFocus(@constCast(&window));
 }
@@ -100,20 +109,24 @@ fn onNotifyEnter(e: *C.XEvent) void {
 }
 
 fn onNotifyMotion(e: *C.XEvent) void {
-    if (!mouse.subwindow) return;
+    if (mouse.subwindow == 0) return;
 
-    while (C.XCheckTypedEvent(display, C.MotionNotify, e)) {}
+    log("motion") catch unreachable;
 
-    const dx = e.xbutton.x_root - mouse.x_root;
-    const dy = e.xbutton.y_root - mouse.y_root;
+    while (C.XCheckTypedEvent(display, C.MotionNotify, e) == @as(c_int, @intCast(1))) {}
 
-    C.XMoveResizeWindow(
+    const dx: i32 = @intCast(e.xbutton.x_root - mouse.x_root);
+    const dy: i32 = @intCast(e.xbutton.y_root - mouse.y_root);
+
+    const button: i32 = @intCast(mouse.button);
+
+    _ = C.XMoveResizeWindow(
         display,
         mouse.subwindow,
-        winX + if (mouse.button == 1) dx else 0,
-        winY + if (mouse.button == 1) dy else 0,
-        @max(1, winW + if (mouse.button == 3) dx else 0),
-        @max(1, winH + if (mouse.button == 3) dy else 0),
+        winX + if (button == 1) dx else 0,
+        winY + if (button == 1) dy else 0,
+        @max(500, winW + if (button == 3) dx else 0),
+        @max(500, winH + if (button == 3) dy else 0),
     );
 }
 
@@ -121,6 +134,15 @@ fn onButtonPress(e: *C.XEvent) void {
     if (e.xbutton.subwindow == 0) return;
 
     //_ = C.XRaiseWindow(display, e.xbutton.subwindow);
+    // TODO
+    var attributes: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, e.xbutton.subwindow, &attributes);
+    winW = attributes.width;
+    winH = attributes.height;
+    winX = attributes.x;
+    winY = attributes.y;
+    //
+
     winFocus(&e.xbutton.subwindow);
     mouse = e.xbutton;
 }
@@ -164,6 +186,19 @@ fn grabInput(window: C.Window) void {
         0,
         0,
     );
+
+    _ = C.XGrabButton(
+        display,
+        3,
+        C.Mod4Mask,
+        root,
+        0,
+        C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
+        C.GrabModeAsync,
+        C.GrabModeAsync,
+        0,
+        0,
+    );
 }
 
 pub fn main() !void {
@@ -191,6 +226,7 @@ pub fn main() !void {
             C.KeyPress => onKeyPress(@ptrCast(&event)),
             C.ButtonPress => onButtonPress(&event),
             C.ButtonRelease => onButtonRelease(&event),
+            C.MotionNotify => onNotifyMotion(&event),
             else => continue,
         }
     }
