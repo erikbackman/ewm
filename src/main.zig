@@ -32,10 +32,13 @@ var winH: i32 = 0;
 
 var screenW: c_int = 0;
 var screenH: c_int = 0;
+const @"screenW80%": c_int = 2752;
+const @"screenH90%": c_int = 1296;
 
 var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
+var windowChanges: C.XWindowChanges = undefined;
 
 const L = std.DoublyLinkedList(Client);
 var list = L{};
@@ -91,15 +94,20 @@ fn winDel(w: C.Window) void {
 }
 
 fn winCenter() void {
-    _ = C.XResizeWindow(display, curr.data.w, 2300, 1300);
+    _ = C.XResizeWindow(display, curr.data.w, @"screenW80%", @"screenH90%");
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+
+    curr.data.wx = @divTrunc((screenW - attributes.width), 2);
+    curr.data.wy = @divTrunc((screenH - attributes.height), 2);
+    curr.data.ww = attributes.width;
+    curr.data.wh = attributes.height;
 
     _ = C.XMoveWindow(
         display,
         curr.data.w,
-        @divTrunc((screenW - attributes.width), 2),
-        @divTrunc((screenH - attributes.height), 2),
+        curr.data.wx,
+        curr.data.wy,
     );
 }
 
@@ -119,17 +127,15 @@ fn winFullscreen() void {
 }
 
 fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
-    var changes: C.XWindowChanges = undefined;
+    windowChanges.x = e.x;
+    windowChanges.y = e.y;
+    windowChanges.width = e.width;
+    windowChanges.height = e.height;
+    windowChanges.border_width = e.border_width;
+    windowChanges.sibling = e.above;
+    windowChanges.stack_mode = e.detail;
 
-    changes.x = e.x;
-    changes.y = e.y;
-    changes.width = e.width;
-    changes.height = e.height;
-    changes.border_width = e.border_width;
-    changes.sibling = e.above;
-    changes.stack_mode = e.detail;
-
-    C.XConfigureWindow(display, e.window, e.value_mask, &changes);
+    C.XConfigureWindow(display, e.window, e.value_mask, &windowChanges);
 }
 
 fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
@@ -206,15 +212,12 @@ fn onNotifyDestroy(e: *C.XEvent) void {
 fn onButtonPress(e: *C.XEvent) void {
     if (e.xbutton.subwindow == 0) return;
 
-    //_ = C.XRaiseWindow(display, e.xbutton.subwindow);
-    // TODO
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, e.xbutton.subwindow, &attributes);
     winW = attributes.width;
     winH = attributes.height;
     winX = attributes.x;
     winY = attributes.y;
-    //
 
     _ = C.XSetInputFocus(
         display,
@@ -223,7 +226,6 @@ fn onButtonPress(e: *C.XEvent) void {
         C.CurrentTime,
     );
 
-    //winFocus(&e.xbutton.subwindow);
     _ = C.XRaiseWindow(display, e.xbutton.subwindow);
     mouse = e.xbutton;
 }
