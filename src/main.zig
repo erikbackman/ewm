@@ -21,6 +21,8 @@ const keys = [_]Key{
     .{ .code = C.XK_m, .mods = C.Mod4Mask },
     .{ .code = C.XK_comma, .mods = C.Mod4Mask },
     .{ .code = C.XK_period, .mods = C.Mod4Mask },
+    .{ .code = C.XK_h, .mods = C.Mod4Mask },
+    .{ .code = C.XK_l, .mods = C.Mod4Mask },
 };
 
 var shouldQuit = false;
@@ -111,6 +113,27 @@ fn winCenter() void {
     );
 }
 
+fn winTileLeft() void {
+    var attributes: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+
+    _ = C.XMoveResizeWindow(display, curr.data.w, 0, 0, @as(c_uint, @intCast(@divTrunc(screenW, 2))), @intCast(screenH));
+}
+
+fn winTileRight() void {
+    var attributes: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+
+    _ = C.XMoveResizeWindow(
+        display,
+        curr.data.w,
+        @divTrunc(screenW, 2),
+        0,
+        @as(c_uint, @intCast(@divTrunc(screenW, 2))),
+        @intCast(screenH),
+    );
+}
+
 fn winFullscreen() void {
     const c = curr.data;
 
@@ -178,6 +201,12 @@ fn onKeyPress(e: *C.XKeyEvent) void {
     }
     if (e.keycode == C.XKeysymToKeycode(display, C.XK_f)) {
         winFullscreen();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_h)) {
+        winTileLeft();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_l)) {
+        winTileRight();
     }
 }
 
