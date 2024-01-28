@@ -1,24 +1,6 @@
 const std = @import("std");
 const C = @import("c.zig");
 
-var shouldQuit = false;
-
-var winX: i32 = 0;
-var winY: i32 = 0;
-var winW: i32 = 0;
-var winH: i32 = 0;
-
-var sw: c_int = 0;
-var sh: c_int = 0;
-
-var ww: c_int = 0;
-var wh: c_int = 0;
-
-var display: *C.Display = undefined;
-var root: C.Window = undefined;
-var mouse: C.XButtonEvent = undefined;
-var winChanges: *C.XWindowChanges = undefined;
-
 const Client = struct {
     full: bool,
     wx: c_int,
@@ -27,8 +9,35 @@ const Client = struct {
     wh: c_int,
     w: C.Window,
 };
-const L = std.DoublyLinkedList(Client);
 
+const Key = struct {
+    code: C.KeyCode,
+    mods: ?c_uint,
+};
+
+const keys = [_]Key{
+    .{ .code = C.XK_q, .mods = C.Mod4Mask },
+    .{ .code = C.XK_f, .mods = C.Mod4Mask },
+    .{ .code = C.XK_m, .mods = C.Mod4Mask },
+    .{ .code = C.XK_comma, .mods = C.Mod4Mask },
+    .{ .code = C.XK_period, .mods = C.Mod4Mask },
+};
+
+var shouldQuit = false;
+
+var winX: i32 = 0;
+var winY: i32 = 0;
+var winW: i32 = 0;
+var winH: i32 = 0;
+
+var screenW: c_int = 0;
+var screenH: c_int = 0;
+
+var display: *C.Display = undefined;
+var root: C.Window = undefined;
+var mouse: C.XButtonEvent = undefined;
+
+const L = std.DoublyLinkedList(Client);
 var list = L{};
 var curr: *L.Node = undefined;
 
@@ -63,15 +72,11 @@ fn winFocus(c: *L.Node) void {
 }
 
 fn winNext() void {
-    if (curr.next) |next| {
-        winFocus(next);
-    }
+    if (curr.next) |next| winFocus(next);
 }
 
 fn winPrev() void {
-    if (curr.prev) |prev| {
-        winFocus(prev);
-    }
+    if (curr.prev) |prev| winFocus(prev);
 }
 
 fn winDel(w: C.Window) void {
@@ -93,8 +98,8 @@ fn winCenter() void {
     _ = C.XMoveWindow(
         display,
         curr.data.w,
-        @divTrunc((sw - attributes.width), 2),
-        @divTrunc((sh - attributes.height), 2),
+        @divTrunc((screenW - attributes.width), 2),
+        @divTrunc((screenH - attributes.height), 2),
     );
 }
 
@@ -105,7 +110,7 @@ fn winFullscreen() void {
         var attributes: C.XWindowAttributes = undefined;
         _ = C.XGetWindowAttributes(display, c.w, &attributes);
 
-        _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(sw)), @as(c_uint, @intCast(sh)));
+        _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(screenW)), @as(c_uint, @intCast(screenH)));
         curr.data.full = true;
     } else {
         _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
@@ -140,16 +145,13 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     _ = C.XResizeWindow(display, window, 1000, 1000);
     _ = C.XSetWindowBorderWidth(display, window, 4);
 
-    // TODO
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, window, &attributes);
     winW = attributes.width;
     winH = attributes.height;
     winX = attributes.x;
     winY = attributes.y;
-    //
 
-    //curr = @constCast(&window);
     try addClient(allocator, @constCast(&window));
     winCenter();
     winFocus(curr);
@@ -179,8 +181,6 @@ fn onNotifyEnter(e: *C.XEvent) void {
 
 fn onNotifyMotion(e: *C.XEvent) void {
     if (mouse.subwindow == 0) return;
-
-    log("motion") catch unreachable;
 
     while (C.XCheckTypedEvent(display, C.MotionNotify, e) == @as(c_int, @intCast(1))) {}
 
@@ -235,81 +235,32 @@ fn onButtonRelease(_: *C.XEvent) void {
 fn grabInput(window: C.Window) void {
     _ = C.XUngrabKey(display, C.AnyKey, C.AnyModifier, root);
 
-    _ = C.XGrabKey(
-        display,
-        C.XKeysymToKeycode(display, C.XK_q),
-        C.Mod4Mask,
-        window,
-        0,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-    );
+    for (keys) |key| {
+        _ = C.XGrabKey(
+            display,
+            C.XKeysymToKeycode(display, key.code),
+            key.mods orelse 0,
+            window,
+            0,
+            C.GrabModeAsync,
+            C.GrabModeAsync,
+        );
+    }
 
-    _ = C.XGrabKey(
-        display,
-        C.XKeysymToKeycode(display, C.XK_f),
-        C.Mod4Mask,
-        window,
-        0,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-    );
-
-    _ = C.XGrabKey(
-        display,
-        C.XKeysymToKeycode(display, C.XK_m),
-        C.Mod4Mask,
-        window,
-        0,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-    );
-
-    _ = C.XGrabKey(
-        display,
-        C.XKeysymToKeycode(display, C.XK_comma),
-        C.Mod4Mask,
-        window,
-        0,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-    );
-
-    _ = C.XGrabKey(
-        display,
-        C.XKeysymToKeycode(display, C.XK_period),
-        C.Mod4Mask,
-        window,
-        0,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-    );
-
-    _ = C.XGrabButton(
-        display,
-        1,
-        C.Mod4Mask,
-        root,
-        0,
-        C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-        0,
-        0,
-    );
-
-    _ = C.XGrabButton(
-        display,
-        3,
-        C.Mod4Mask,
-        root,
-        0,
-        C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
-        C.GrabModeAsync,
-        C.GrabModeAsync,
-        0,
-        0,
-    );
+    for ([_]u8{ 1, 3 }) |btn| {
+        _ = C.XGrabButton(
+            display,
+            btn,
+            C.Mod4Mask,
+            root,
+            0,
+            C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
+            C.GrabModeAsync,
+            C.GrabModeAsync,
+            0,
+            0,
+        );
+    }
 }
 
 pub fn main() !void {
@@ -322,8 +273,8 @@ pub fn main() !void {
 
     const screen = C.DefaultScreen(display);
     root = C.RootWindow(display, screen);
-    sw = C.XDisplayWidth(display, screen);
-    sh = C.XDisplayHeight(display, screen);
+    screenW = C.XDisplayWidth(display, screen);
+    screenH = C.XDisplayHeight(display, screen);
 
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
     _ = C.XDefineCursor(display, root, C.XCreateFontCursor(display, 68));
