@@ -20,39 +20,97 @@ var mouse: C.XButtonEvent = undefined;
 var winChanges: *C.XWindowChanges = undefined;
 
 const Client = struct {
-    next: *Client,
-    prev: *Client,
-
-    focused: bool,
-    wx: i32,
-    wy: i32,
-    ww: u32,
-    wh: u32,
+    full: bool,
+    wx: c_int,
+    wy: c_int,
+    ww: c_int,
+    wh: c_int,
     w: C.Window,
 };
+const L = std.DoublyLinkedList(Client);
 
-//*Client = undefined;
-var curr: *C.Window = undefined;
+var list = L{};
+var curr: *L.Node = undefined;
 
-fn winFocus(c: *C.Window) void {
+fn addClient(allocator: std.mem.Allocator, window: *C.Window) !void {
+    var attributes: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, window.*, &attributes);
+
+    const client = Client{
+        .full = false,
+        .wx = attributes.x,
+        .wy = attributes.y,
+        .ww = attributes.width,
+        .wh = attributes.height,
+        .w = window.*,
+    };
+
+    var node = try allocator.create(L.Node);
+    node.data = client;
+    list.prepend(node);
+    curr = node;
+}
+
+fn winFocus(c: *L.Node) void {
     curr = c;
     _ = C.XSetInputFocus(
         display,
-        curr.*,
+        curr.data.w,
         C.RevertToParent,
         C.CurrentTime,
     );
-    _ = C.XRaiseWindow(display, curr.*);
+    _ = C.XRaiseWindow(display, curr.data.w);
 }
 
-fn winCenter(w: C.Window) void {
+fn winNext() void {
+    if (curr.next) |next| {
+        winFocus(next);
+    }
+}
+
+fn winPrev() void {
+    if (curr.prev) |prev| {
+        winFocus(prev);
+    }
+}
+
+fn winDel(w: C.Window) void {
+    var next = list.first;
+
+    while (next) |node| : (next = node.next) {
+        if (node.data.w == w) {
+            list.remove(node);
+            break;
+        }
+    }
+}
+
+fn winCenter() void {
+    _ = C.XResizeWindow(display, curr.data.w, 2300, 1300);
     var attributes: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, w, &attributes);
+    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
 
-    const x = @divTrunc((sw - attributes.x), 2);
-    const y = @divTrunc((sh - attributes.y), 2);
+    _ = C.XMoveWindow(
+        display,
+        curr.data.w,
+        @divTrunc((sw - attributes.width), 2),
+        @divTrunc((sh - attributes.height), 2),
+    );
+}
 
-    _ = C.XMoveWindow(display, w, x, y);
+fn winFullscreen() void {
+    const c = curr.data;
+
+    if (!c.full) {
+        var attributes: C.XWindowAttributes = undefined;
+        _ = C.XGetWindowAttributes(display, c.w, &attributes);
+
+        _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(sw)), @as(c_uint, @intCast(sh)));
+        curr.data.full = true;
+    } else {
+        _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
+        curr.data.full = false;
+    }
 }
 
 fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
@@ -69,7 +127,7 @@ fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
     C.XConfigureWindow(display, e.window, e.value_mask, &changes);
 }
 
-fn onMapRequest(event: *C.XEvent) void {
+fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     const window: C.Window = event.xmaprequest.window;
 
     _ = C.XSelectInput(display, window, C.StructureNotifyMask | C.EnterWindowMask);
@@ -91,16 +149,27 @@ fn onMapRequest(event: *C.XEvent) void {
     winY = attributes.y;
     //
 
-    curr = @constCast(&window);
-    winFocus(@constCast(&window));
+    //curr = @constCast(&window);
+    try addClient(allocator, @constCast(&window));
+    winCenter();
+    winFocus(curr);
 }
 
 fn onKeyPress(e: *C.XKeyEvent) void {
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_space)) {
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_q)) {
         shouldQuit = true;
     }
     if (e.keycode == C.XKeysymToKeycode(display, C.XK_m)) {
-        winCenter(curr.*);
+        winCenter();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_comma)) {
+        winPrev();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_period)) {
+        winNext();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_f)) {
+        winFullscreen();
     }
 }
 
@@ -125,9 +194,13 @@ fn onNotifyMotion(e: *C.XEvent) void {
         mouse.subwindow,
         winX + if (button == 1) dx else 0,
         winY + if (button == 1) dy else 0,
-        @max(500, winW + if (button == 3) dx else 0),
-        @max(500, winH + if (button == 3) dy else 0),
+        @max(1, winW + if (button == 3) dx else 0),
+        @max(1, winH + if (button == 3) dy else 0),
     );
+}
+
+fn onNotifyDestroy(e: *C.XEvent) void {
+    winDel(e.xdestroywindow.window);
 }
 
 fn onButtonPress(e: *C.XEvent) void {
@@ -143,7 +216,15 @@ fn onButtonPress(e: *C.XEvent) void {
     winY = attributes.y;
     //
 
-    winFocus(&e.xbutton.subwindow);
+    _ = C.XSetInputFocus(
+        display,
+        e.xbutton.subwindow,
+        C.RevertToParent,
+        C.CurrentTime,
+    );
+
+    //winFocus(&e.xbutton.subwindow);
+    _ = C.XRaiseWindow(display, e.xbutton.subwindow);
     mouse = e.xbutton;
 }
 
@@ -156,8 +237,18 @@ fn grabInput(window: C.Window) void {
 
     _ = C.XGrabKey(
         display,
-        C.XKeysymToKeycode(display, C.XK_space),
-        C.ControlMask,
+        C.XKeysymToKeycode(display, C.XK_q),
+        C.Mod4Mask,
+        window,
+        0,
+        C.GrabModeAsync,
+        C.GrabModeAsync,
+    );
+
+    _ = C.XGrabKey(
+        display,
+        C.XKeysymToKeycode(display, C.XK_f),
+        C.Mod4Mask,
         window,
         0,
         C.GrabModeAsync,
@@ -167,7 +258,27 @@ fn grabInput(window: C.Window) void {
     _ = C.XGrabKey(
         display,
         C.XKeysymToKeycode(display, C.XK_m),
-        C.ControlMask,
+        C.Mod4Mask,
+        window,
+        0,
+        C.GrabModeAsync,
+        C.GrabModeAsync,
+    );
+
+    _ = C.XGrabKey(
+        display,
+        C.XKeysymToKeycode(display, C.XK_comma),
+        C.Mod4Mask,
+        window,
+        0,
+        C.GrabModeAsync,
+        C.GrabModeAsync,
+    );
+
+    _ = C.XGrabKey(
+        display,
+        C.XKeysymToKeycode(display, C.XK_period),
+        C.Mod4Mask,
         window,
         0,
         C.GrabModeAsync,
@@ -202,6 +313,9 @@ fn grabInput(window: C.Window) void {
 }
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
     var event: C.XEvent = undefined;
 
     display = C.XOpenDisplay(0) orelse std.os.exit(1);
@@ -222,14 +336,16 @@ pub fn main() !void {
 
         switch (event.type) {
             C.Expose => continue,
-            C.MapRequest => onMapRequest(&event),
+            C.MapRequest => try onMapRequest(allocator, &event),
             C.KeyPress => onKeyPress(@ptrCast(&event)),
             C.ButtonPress => onButtonPress(&event),
             C.ButtonRelease => onButtonRelease(&event),
             C.MotionNotify => onNotifyMotion(&event),
+            C.DestroyNotify => onNotifyDestroy(&event),
             else => continue,
         }
     }
+
     _ = C.XCloseDisplay(display);
     std.os.exit(0);
 }
