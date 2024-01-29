@@ -35,8 +35,6 @@ var winH: i32 = 0;
 
 var screenW: c_int = 0;
 var screenH: c_int = 0;
-const @"screenW80%": c_int = 2752;
-const @"screenH90%": c_int = 1296;
 
 var display: *C.Display = undefined;
 var root: C.Window = undefined;
@@ -62,7 +60,7 @@ fn addClient(allocator: std.mem.Allocator, window: *C.Window) !void {
 
     var node = try allocator.create(L.Node);
     node.data = client;
-    list.prepend(node);
+    list.append(node);
     curr = node;
 }
 
@@ -85,19 +83,8 @@ fn winPrev() void {
     if (curr.prev) |prev| winFocus(prev);
 }
 
-fn winDel(w: C.Window) void {
-    var next = list.first;
-
-    while (next) |node| : (next = node.next) {
-        if (node.data.w == w) {
-            list.remove(node);
-            break;
-        }
-    }
-}
-
 fn winCenter() void {
-    _ = C.XResizeWindow(display, curr.data.w, @"screenW80%", @"screenH90%");
+    _ = C.XResizeWindow(display, curr.data.w, 2752, 1400);
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
 
@@ -195,9 +182,6 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     _ = C.XMapWindow(display, window);
     _ = C.XRaiseWindow(display, window);
     _ = C.XSetInputFocus(display, window, C.RevertToParent, C.CurrentTime);
-
-    _ = C.XMoveWindow(display, window, 1720, 720);
-    _ = C.XResizeWindow(display, window, 1000, 1000);
     _ = C.XSetWindowBorderWidth(display, window, 4);
 
     var attributes: C.XWindowAttributes = undefined;
@@ -264,7 +248,17 @@ fn onNotifyMotion(e: *C.XEvent) void {
 }
 
 fn onNotifyDestroy(e: *C.XEvent) void {
-    winDel(e.xdestroywindow.window);
+    var next = list.first;
+    var found = false;
+    while (next) |node| : (next = node.next) {
+        if (node.data.w == e.xdestroywindow.window) {
+            if (node.prev) |n| winFocus(n);
+            list.remove(node);
+            found = true;
+            break;
+        }
+    }
+    @panic("failed to delete node, this shouldn't happen");
 }
 
 fn onButtonPress(e: *C.XEvent) void {
@@ -359,10 +353,4 @@ pub fn main() !void {
 
     _ = C.XCloseDisplay(display);
     std.os.exit(0);
-}
-
-fn log(msg: []const u8) !void {
-    const file = try std.fs.openFileAbsolute("/home/ebn/logs/ewm.log", .{ .mode = .write_only });
-    defer file.close();
-    _ = try file.write(msg);
 }
