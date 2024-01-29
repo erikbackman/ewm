@@ -267,7 +267,9 @@ fn onNotifyDestroy(e: *C.XEvent) void {
             break;
         }
     }
-    @panic("failed to delete node, this shouldn't happen");
+    if (!found) {
+        @panic("failed to delete node, this shouldn't happen");
+    }
 }
 
 fn onButtonPress(e: *C.XEvent) void {
