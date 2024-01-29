@@ -24,6 +24,7 @@ const keys = [_]Key{
     .{ .code = C.XK_h, .mods = C.Mod4Mask },
     .{ .code = C.XK_l, .mods = C.Mod4Mask },
     .{ .code = C.XK_t, .mods = C.Mod4Mask },
+    .{ .code = C.XK_s, .mods = C.Mod4Mask },
 };
 
 var shouldQuit = false;
@@ -83,21 +84,21 @@ fn winPrev() void {
     if (curr.prev) |prev| winFocus(prev);
 }
 
-fn winCenter() void {
-    _ = C.XResizeWindow(display, curr.data.w, 2752, 1400);
+fn winCenter(c: *L.Node) void {
+    _ = C.XResizeWindow(display, c.data.w, 2752, 1400);
     var attributes: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+    _ = C.XGetWindowAttributes(display, c.data.w, &attributes);
 
-    curr.data.wx = @divTrunc((screenW - attributes.width), 2);
-    curr.data.wy = @divTrunc((screenH - attributes.height), 2);
-    curr.data.ww = attributes.width;
-    curr.data.wh = attributes.height;
+    c.data.wx = @divTrunc((screenW - attributes.width), 2);
+    c.data.wy = @divTrunc((screenH - attributes.height), 2);
+    c.data.ww = attributes.width;
+    c.data.wh = attributes.height;
 
     _ = C.XMoveWindow(
         display,
-        curr.data.w,
-        curr.data.wx,
-        curr.data.wy,
+        c.data.w,
+        c.data.wx,
+        c.data.wy,
     );
 }
 
@@ -147,6 +148,11 @@ fn tileAll() void {
     winTileRight();
 }
 
+fn stackAll() void {
+    var next = list.first;
+    while (next) |node| : (next = node.next) winCenter(node);
+}
+
 fn winFullscreen() void {
     const c = curr.data;
 
@@ -192,7 +198,7 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     winY = attributes.y;
 
     try addClient(allocator, @constCast(&window));
-    winCenter();
+    winCenter(curr);
     winFocus(curr);
 }
 
@@ -201,7 +207,7 @@ fn onKeyPress(e: *C.XKeyEvent) void {
         shouldQuit = true;
     }
     if (e.keycode == C.XKeysymToKeycode(display, C.XK_m)) {
-        winCenter();
+        winCenter(curr);
     }
     if (e.keycode == C.XKeysymToKeycode(display, C.XK_comma)) {
         winPrev();
@@ -220,6 +226,9 @@ fn onKeyPress(e: *C.XKeyEvent) void {
     }
     if (e.keycode == C.XKeysymToKeycode(display, C.XK_t)) {
         tileAll();
+    }
+    if (e.keycode == C.XKeysymToKeycode(display, C.XK_s)) {
+        stackAll();
     }
 }
 
