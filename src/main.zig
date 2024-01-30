@@ -1,6 +1,73 @@
+// TODO: Currently we don't handle subwindows in a nice way so whenever a client triggers a popup window
+// we fail to focus the parent after the subwindow closes.
 const std = @import("std");
 const C = @import("c.zig");
 
+// Keybinds, currently every key is directly under Mod4Mask but I will probably add
+// the ability to specify modifiers.
+const keys = [_]Key{
+    .{ .keysym = C.XK_q, .action = &quit },
+    .{ .keysym = C.XK_f, .action = &winFullscreen },
+    .{ .keysym = C.XK_m, .action = &centerCurrent },
+    .{ .keysym = C.XK_comma, .action = &winPrev },
+    .{ .keysym = C.XK_period, .action = &winNext },
+    .{ .keysym = C.XK_h, .action = &tileCurrentLeft },
+    .{ .keysym = C.XK_l, .action = &tileCurrentRight },
+    .{ .keysym = C.XK_t, .action = &tileAll },
+    .{ .keysym = C.XK_s, .action = &stackAll },
+};
+
+const Key = struct {
+    keysym: C.KeySym,
+    action: *const fn () void,
+};
+
+// Generate a keymap with key: keysym and value: function pointer,
+// this is to avoid having to define keys to grab and then having to add same
+// keys to be handled in keypress handling code.
+var keyMap: std.AutoHashMap(c_uint, *const fn () void) = undefined;
+
+fn initKeyMap(allocator: std.mem.Allocator) !std.AutoHashMap(c_uint, *const fn () void) {
+    var map = std.AutoHashMap(c_uint, *const fn () void).init(allocator);
+    errdefer map.deinit();
+    inline for (keys) |key| {
+        try map.put(C.XKeysymToKeycode(display, key.keysym), key.action);
+    }
+    return map;
+}
+
+fn grabInput(window: C.Window) void {
+    _ = C.XUngrabKey(display, C.AnyKey, C.AnyModifier, root);
+
+    for (keys) |key| {
+        _ = C.XGrabKey(
+            display,
+            C.XKeysymToKeycode(display, key.keysym),
+            C.Mod4Mask,
+            window,
+            0,
+            C.GrabModeAsync,
+            C.GrabModeAsync,
+        );
+    }
+
+    for ([_]u8{ 1, 3 }) |btn| {
+        _ = C.XGrabButton(
+            display,
+            btn,
+            C.Mod4Mask,
+            root,
+            0,
+            C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
+            C.GrabModeAsync,
+            C.GrabModeAsync,
+            0,
+            0,
+        );
+    }
+}
+
+// Global application state
 const Client = struct {
     full: bool,
     wx: c_int,
@@ -8,23 +75,6 @@ const Client = struct {
     ww: c_int,
     wh: c_int,
     w: C.Window,
-};
-
-const Key = struct {
-    code: C.KeyCode,
-    mods: ?c_uint,
-};
-
-const keys = [_]Key{
-    .{ .code = C.XK_q, .mods = C.Mod4Mask },
-    .{ .code = C.XK_f, .mods = C.Mod4Mask },
-    .{ .code = C.XK_m, .mods = C.Mod4Mask },
-    .{ .code = C.XK_comma, .mods = C.Mod4Mask },
-    .{ .code = C.XK_period, .mods = C.Mod4Mask },
-    .{ .code = C.XK_h, .mods = C.Mod4Mask },
-    .{ .code = C.XK_l, .mods = C.Mod4Mask },
-    .{ .code = C.XK_t, .mods = C.Mod4Mask },
-    .{ .code = C.XK_s, .mods = C.Mod4Mask },
 };
 
 var shouldQuit = false;
@@ -36,12 +86,15 @@ var winH: i32 = 0;
 
 var screenW: c_int = 0;
 var screenH: c_int = 0;
+var centerW: c_uint = 2752;
+var centerH: c_uint = 1400;
 
 var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
 var windowChanges: C.XWindowChanges = undefined;
 
+// Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
 var list = L{};
 var curr: *L.Node = undefined;
@@ -65,27 +118,26 @@ fn addClient(allocator: std.mem.Allocator, window: *C.Window) !void {
     curr = node;
 }
 
-fn winFocus(c: *L.Node) void {
-    curr = c;
-    _ = C.XSetInputFocus(
-        display,
-        curr.data.w,
-        C.RevertToParent,
-        C.CurrentTime,
-    );
-    _ = C.XRaiseWindow(display, curr.data.w);
+const WindowAttributes = struct {
+    w: c_uint,
+    h: c_uint,
+    x: c_int,
+    y: c_int,
+};
+
+fn getWindowAttributes(window: *C.XWindow) WindowAttributes {
+    var attr: C.XWindowAttributes = undefined;
+    _ = C.XGetWindowAttributes(display, window, &attr);
+    return WindowAttributes{
+        .w = attr.width,
+        .h = attr.height,
+        .x = attr.x,
+        .y = attr.y,
+    };
 }
 
-fn winNext() void {
-    if (curr.next) |next| winFocus(next);
-}
-
-fn winPrev() void {
-    if (curr.prev) |prev| winFocus(prev);
-}
-
-fn winCenter(c: *L.Node) void {
-    _ = C.XResizeWindow(display, c.data.w, 2752, 1400);
+fn center(c: *L.Node) void {
+    _ = C.XResizeWindow(display, c.data.w, centerW, centerH);
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, c.data.w, &attributes);
 
@@ -102,16 +154,53 @@ fn winCenter(c: *L.Node) void {
     );
 }
 
-fn winTileLeft() void {
-    var attributes: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
-
-    _ = C.XMoveResizeWindow(display, curr.data.w, 0, 0, @as(c_uint, @intCast(@divTrunc(screenW, 2))), @intCast(screenH));
+fn focus(c: *L.Node) void {
+    curr = c;
+    _ = C.XSetInputFocus(
+        display,
+        curr.data.w,
+        C.RevertToParent,
+        C.CurrentTime,
+    );
+    _ = C.XRaiseWindow(display, curr.data.w);
 }
 
-fn winTileRight() void {
+// Actions. None of these take any arguments and only work on global state and are
+// meant to be directly mapped to keys.
+fn quit() void {
+    shouldQuit = true;
+}
+
+fn winNext() void {
+    if (curr.next) |next| focus(next);
+}
+
+fn winPrev() void {
+    if (curr.prev) |prev| focus(prev);
+}
+
+fn centerCurrent() void {
+    center(curr);
+}
+
+fn tileCurrentLeft() void {
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+
+    _ = C.XMoveResizeWindow(
+        display,
+        curr.data.w,
+        0,
+        0,
+        @as(c_uint, @intCast(@divTrunc(screenW, 2))),
+        @intCast(screenH),
+    );
+}
+
+fn tileCurrentRight() void {
+    // var attributes: C.XWindowAttributes = undefined;
+    // _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+    //var attributes = getWindowAttributes(curr.data.w);
 
     _ = C.XMoveResizeWindow(
         display,
@@ -124,12 +213,10 @@ fn winTileRight() void {
 }
 
 fn tileAll() void {
-    var attr: C.XWindowAttributes = undefined;
-
     var next = list.first;
     const count = list.len - 1;
     const h: c_uint = @intCast(1440 / count);
-
+    var attr: C.XWindowAttributes = undefined;
     var i: c_uint = 0;
     while (next) |node| : (next = node.next) {
         if (node.data.w != curr.data.w) {
@@ -145,21 +232,19 @@ fn tileAll() void {
             i += 1;
         }
     }
-    winTileRight();
+    tileCurrentRight();
 }
 
 fn stackAll() void {
     var next = list.first;
-    while (next) |node| : (next = node.next) winCenter(node);
+    while (next) |node| : (next = node.next) center(node);
 }
 
 fn winFullscreen() void {
     const c = curr.data;
-
     if (!c.full) {
         var attributes: C.XWindowAttributes = undefined;
         _ = C.XGetWindowAttributes(display, c.w, &attributes);
-
         _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(screenW)), @as(c_uint, @intCast(screenH)));
         curr.data.full = true;
     } else {
@@ -168,6 +253,7 @@ fn winFullscreen() void {
     }
 }
 
+// Event handlers
 fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
     windowChanges.x = e.x;
     windowChanges.y = e.y;
@@ -198,38 +284,12 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     winY = attributes.y;
 
     try addClient(allocator, @constCast(&window));
-    winCenter(curr);
-    winFocus(curr);
+    center(curr);
+    focus(curr);
 }
 
-fn onKeyPress(e: *C.XKeyEvent) void {
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_q)) {
-        shouldQuit = true;
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_m)) {
-        winCenter(curr);
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_comma)) {
-        winPrev();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_period)) {
-        winNext();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_f)) {
-        winFullscreen();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_h)) {
-        winTileLeft();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_l)) {
-        winTileRight();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_t)) {
-        tileAll();
-    }
-    if (e.keycode == C.XKeysymToKeycode(display, C.XK_s)) {
-        stackAll();
-    }
+fn onKeyPress(e: *C.XEvent) void {
+    if (keyMap.get(e.xkey.keycode)) |action| action();
 }
 
 fn onNotifyEnter(e: *C.XEvent) void {
@@ -261,7 +321,7 @@ fn onNotifyDestroy(e: *C.XEvent) void {
     var found = false;
     while (next) |node| : (next = node.next) {
         if (node.data.w == e.xdestroywindow.window) {
-            if (node.prev) |n| winFocus(n);
+            if (node.prev) |n| focus(n);
             list.remove(node);
             found = true;
             break;
@@ -297,37 +357,6 @@ fn onButtonRelease(_: *C.XEvent) void {
     mouse.subwindow = 0;
 }
 
-fn grabInput(window: C.Window) void {
-    _ = C.XUngrabKey(display, C.AnyKey, C.AnyModifier, root);
-
-    for (keys) |key| {
-        _ = C.XGrabKey(
-            display,
-            C.XKeysymToKeycode(display, key.code),
-            key.mods orelse 0,
-            window,
-            0,
-            C.GrabModeAsync,
-            C.GrabModeAsync,
-        );
-    }
-
-    for ([_]u8{ 1, 3 }) |btn| {
-        _ = C.XGrabButton(
-            display,
-            btn,
-            C.Mod4Mask,
-            root,
-            0,
-            C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
-            C.GrabModeAsync,
-            C.GrabModeAsync,
-            0,
-            0,
-        );
-    }
-}
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -338,22 +367,22 @@ pub fn main() !void {
 
     const screen = C.DefaultScreen(display);
     root = C.RootWindow(display, screen);
-    screenW = C.XDisplayWidth(display, screen);
-    screenH = C.XDisplayHeight(display, screen);
+    screenW = @intCast(C.XDisplayWidth(display, screen));
+    screenH = @intCast(C.XDisplayHeight(display, screen));
 
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
     _ = C.XDefineCursor(display, root, C.XCreateFontCursor(display, 68));
 
     grabInput(root);
+    keyMap = initKeyMap(allocator) catch @panic("failed to init keymap");
 
     while (true) {
         if (shouldQuit) break;
         _ = C.XNextEvent(display, &event);
 
         switch (event.type) {
-            C.Expose => continue,
             C.MapRequest => try onMapRequest(allocator, &event),
-            C.KeyPress => onKeyPress(@ptrCast(&event)),
+            C.KeyPress => onKeyPress(&event),
             C.ButtonPress => onButtonPress(&event),
             C.ButtonRelease => onButtonRelease(&event),
             C.MotionNotify => onNotifyMotion(&event),
