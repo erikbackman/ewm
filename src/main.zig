@@ -97,7 +97,7 @@ var windowChanges: C.XWindowChanges = undefined;
 // Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
 var list = L{};
-var curr: *L.Node = undefined;
+var curr: ?*L.Node = null;
 
 fn addClient(allocator: std.mem.Allocator, window: *C.Window) !void {
     var attributes: C.XWindowAttributes = undefined;
@@ -113,27 +113,10 @@ fn addClient(allocator: std.mem.Allocator, window: *C.Window) !void {
     };
 
     var node = try allocator.create(L.Node);
+
     node.data = client;
     list.append(node);
     curr = node;
-}
-
-const WindowAttributes = struct {
-    w: c_uint,
-    h: c_uint,
-    x: c_int,
-    y: c_int,
-};
-
-fn getWindowAttributes(window: *C.XWindow) WindowAttributes {
-    var attr: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, window, &attr);
-    return WindowAttributes{
-        .w = attr.width,
-        .h = attr.height,
-        .x = attr.x,
-        .y = attr.y,
-    };
 }
 
 fn center(c: *L.Node) void {
@@ -155,14 +138,18 @@ fn center(c: *L.Node) void {
 }
 
 fn focus(c: *L.Node) void {
+    if (curr) |node| _ = C.XSetWindowBorder(display, node.data.w, 0);
     curr = c;
-    _ = C.XSetInputFocus(
-        display,
-        curr.data.w,
-        C.RevertToParent,
-        C.CurrentTime,
-    );
-    _ = C.XRaiseWindow(display, curr.data.w);
+    if (curr) |node| {
+        _ = C.XSetInputFocus(
+            display,
+            node.data.w,
+            C.RevertToParent,
+            C.CurrentTime,
+        );
+        _ = C.XRaiseWindow(display, node.data.w);
+        _ = C.XSetWindowBorder(display, node.data.w, 255);
+    }
 }
 
 // Actions. None of these take any arguments and only work on global state and are
@@ -172,44 +159,54 @@ fn quit() void {
 }
 
 fn winNext() void {
-    if (curr.next) |next| focus(next);
+    if (curr == null) return;
+    if (curr.?.next) |next| {
+        focus(next);
+    } else if (list.first) |first| {
+        focus(first);
+    }
 }
 
 fn winPrev() void {
-    if (curr.prev) |prev| focus(prev);
+    if (curr == null) return;
+    if (curr.?.prev) |prev| {
+        focus(prev);
+    } else if (list.last) |last| {
+        focus(last);
+    }
 }
 
 fn centerCurrent() void {
-    center(curr);
+    if (curr) |node| center(node);
 }
 
 fn tileCurrentLeft() void {
-    var attributes: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
+    if (curr) |node| {
+        var attributes: C.XWindowAttributes = undefined;
+        _ = C.XGetWindowAttributes(display, node.data.w, &attributes);
 
-    _ = C.XMoveResizeWindow(
-        display,
-        curr.data.w,
-        0,
-        0,
-        @as(c_uint, @intCast(@divTrunc(screenW, 2))),
-        @intCast(screenH),
-    );
+        _ = C.XMoveResizeWindow(
+            display,
+            node.data.w,
+            0,
+            0,
+            @as(c_uint, @intCast(@divTrunc(screenW, 2))),
+            @intCast(screenH),
+        );
+    }
 }
 
 fn tileCurrentRight() void {
-    // var attributes: C.XWindowAttributes = undefined;
-    // _ = C.XGetWindowAttributes(display, curr.data.w, &attributes);
-    //var attributes = getWindowAttributes(curr.data.w);
-
-    _ = C.XMoveResizeWindow(
-        display,
-        curr.data.w,
-        @divTrunc(screenW, 2) + 2,
-        0,
-        @as(c_uint, @intCast(@divTrunc(screenW, 2))),
-        @intCast(screenH),
-    );
+    if (curr) |node| {
+        _ = C.XMoveResizeWindow(
+            display,
+            node.data.w,
+            @divTrunc(screenW, 2) + 2,
+            0,
+            @as(c_uint, @intCast(@divTrunc(screenW, 2))),
+            @intCast(screenH),
+        );
+    }
 }
 
 fn tileAll() void {
@@ -219,7 +216,7 @@ fn tileAll() void {
     var attr: C.XWindowAttributes = undefined;
     var i: c_uint = 0;
     while (next) |node| : (next = node.next) {
-        if (node.data.w != curr.data.w) {
+        if (node.data.w != curr.?.data.w) {
             _ = C.XGetWindowAttributes(display, node.data.w, &attr);
             _ = C.XMoveResizeWindow(
                 display,
@@ -241,16 +238,29 @@ fn stackAll() void {
 }
 
 fn winFullscreen() void {
-    const c = curr.data;
-    if (!c.full) {
-        var attributes: C.XWindowAttributes = undefined;
-        _ = C.XGetWindowAttributes(display, c.w, &attributes);
-        _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(screenW)), @as(c_uint, @intCast(screenH)));
-        curr.data.full = true;
-    } else {
-        _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
-        curr.data.full = false;
+    if (curr) |node| {
+        const c = node.data;
+        if (!c.full) {
+            var attributes: C.XWindowAttributes = undefined;
+            _ = C.XGetWindowAttributes(display, c.w, &attributes);
+            _ = C.XMoveResizeWindow(display, c.w, 0, 0, @as(c_uint, @intCast(screenW)), @as(c_uint, @intCast(screenH)));
+            node.data.full = true;
+        } else {
+            _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
+            node.data.full = false;
+        }
     }
+}
+
+// Utils
+fn winToNode(w: C.Window) ?*L.Node {
+    var next = list.first;
+    while (next) |node| : (next = node.next) {
+        if (node.data.w == w) {
+            return node;
+        }
+    }
+    return null;
 }
 
 // Event handlers
@@ -263,17 +273,14 @@ fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
     windowChanges.sibling = e.above;
     windowChanges.stack_mode = e.detail;
 
-    C.XConfigureWindow(display, e.window, e.value_mask, &windowChanges);
+    _ = C.XConfigureWindow(display, e.window, @intCast(e.value_mask), &windowChanges);
 }
 
 fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     const window: C.Window = event.xmaprequest.window;
-
     _ = C.XSelectInput(display, window, C.StructureNotifyMask | C.EnterWindowMask);
 
     _ = C.XMapWindow(display, window);
-    _ = C.XRaiseWindow(display, window);
-    _ = C.XSetInputFocus(display, window, C.RevertToParent, C.CurrentTime);
     _ = C.XSetWindowBorderWidth(display, window, 4);
 
     var attributes: C.XWindowAttributes = undefined;
@@ -284,8 +291,37 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     winY = attributes.y;
 
     try addClient(allocator, @constCast(&window));
-    center(curr);
-    focus(curr);
+
+    if (curr) |node| {
+        center(node);
+        focus(node);
+    }
+}
+
+fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
+    // wc: C.XWindowChanges = undefined;
+    list.remove(node);
+    if (!destroyed) {
+        _ = C.XGrabServer(display);
+        _ = C.XSetErrorHandler(ignoreError);
+        _ = C.XSelectInput(display, node.data.w, C.NoEventMask);
+        _ = C.XUngrabButton(display, C.AnyButton, C.AnyModifier, node.data.w);
+        _ = C.XSync(display, 0);
+        _ = C.XSetErrorHandler(handleError);
+        _ = C.XUngrabServer(display);
+    }
+    allocator.destroy(node);
+}
+
+fn onUnmapNotify(allocator: std.mem.Allocator, e: *C.XEvent) void {
+    const ev = &e.xunmap;
+    if (winToNode(ev.window)) |node| {
+        if (ev.send_event == 1) {
+            // TODO: handle this
+        } else {
+            unmanage(allocator, node, false);
+        }
+    }
 }
 
 fn onKeyPress(e: *C.XEvent) void {
@@ -316,20 +352,9 @@ fn onNotifyMotion(e: *C.XEvent) void {
     );
 }
 
-fn onNotifyDestroy(e: *C.XEvent) void {
-    var next = list.first;
-    var found = false;
-    while (next) |node| : (next = node.next) {
-        if (node.data.w == e.xdestroywindow.window) {
-            if (node.prev) |n| focus(n);
-            list.remove(node);
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        @panic("failed to delete node, this shouldn't happen");
-    }
+fn onNotifyDestroy(allocator: std.mem.Allocator, e: *C.XEvent) void {
+    const ev = &e.xdestroywindow;
+    if (winToNode(ev.window)) |node| unmanage(allocator, node, true);
 }
 
 fn onButtonPress(e: *C.XEvent) void {
@@ -350,6 +375,7 @@ fn onButtonPress(e: *C.XEvent) void {
     );
 
     _ = C.XRaiseWindow(display, e.xbutton.subwindow);
+
     mouse = e.xbutton;
 }
 
@@ -357,6 +383,33 @@ fn onButtonRelease(_: *C.XEvent) void {
     mouse.subwindow = 0;
 }
 
+// Error handlers
+fn handleError(_: ?*C.Display, event: [*c]C.XErrorEvent) callconv(.C) c_int {
+    const evt: *C.XErrorEvent = @ptrCast(event);
+
+    switch (evt.error_code) {
+        C.BadWindow => logError("bad window"),
+        else => logError("Some error :^)"),
+    }
+    return 0;
+}
+
+fn ignoreError(_: ?*C.Display, _: [*c]C.XErrorEvent) callconv(.C) c_int {
+    return 0;
+}
+
+// Logging
+fn logError(msg: []const u8) void {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("Error: {s}\n", .{msg}) catch return;
+}
+
+fn logInfo(msg: []const u8) void {
+    const stdInfo = std.io.getStdOut().writer();
+    stdInfo.print("INFO: {s}\n", .{msg}) catch return;
+}
+
+// Main loop
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -370,6 +423,7 @@ pub fn main() !void {
     screenW = @intCast(C.XDisplayWidth(display, screen));
     screenH = @intCast(C.XDisplayHeight(display, screen));
 
+    _ = C.XSetErrorHandler(handleError);
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
     _ = C.XDefineCursor(display, root, C.XCreateFontCursor(display, 68));
 
@@ -382,11 +436,13 @@ pub fn main() !void {
 
         switch (event.type) {
             C.MapRequest => try onMapRequest(allocator, &event),
+            C.UnmapNotify => onUnmapNotify(allocator, &event),
             C.KeyPress => onKeyPress(&event),
             C.ButtonPress => onButtonPress(&event),
             C.ButtonRelease => onButtonRelease(&event),
             C.MotionNotify => onNotifyMotion(&event),
-            C.DestroyNotify => onNotifyDestroy(&event),
+            C.DestroyNotify => onNotifyDestroy(allocator, &event),
+            C.ConfigureRequest => onConfigureRequest(@ptrCast(&event)),
             else => continue,
         }
     }
