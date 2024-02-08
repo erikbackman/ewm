@@ -289,8 +289,10 @@ fn handleError(_: ?*C.Display, event: [*c]C.XErrorEvent) callconv(.C) c_int {
     const evt: *C.XErrorEvent = @ptrCast(event);
 
     switch (evt.error_code) {
-        C.BadWindow => logError("bad window"),
-        else => logError("Some error :^)"),
+        C.BadMatch => logError("BadMatch"),
+        C.BadWindow => logError("BadWindow"),
+        C.BadDrawable => logError("BadDrawable"),
+        else => logError("TODO: I should handle this error"),
     }
     return 0;
 }
