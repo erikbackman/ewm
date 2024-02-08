@@ -16,3 +16,5 @@ using some made up configuration language.
 ## Features
 - It does what I want
 - No configuration
+
+![Alt Text](gif.gif)
