@@ -105,7 +105,7 @@ const L = std.DoublyLinkedList(Client);
 var list = L{};
 var cursor: ?*L.Node = null; // having the cursor be nullable is annoying..
 
-fn addClient(allocator: std.mem.Allocator, window: C.Window) !void {
+fn addClient(allocator: std.mem.Allocator, window: C.Window) !*L.Node {
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, window, &attributes);
 
@@ -122,8 +122,8 @@ fn addClient(allocator: std.mem.Allocator, window: C.Window) !void {
 
     node.data = client;
     list.append(node);
-    focus(node);
-    cursor = node;
+
+    return node;
 }
 
 fn center(c: *L.Node) void {
@@ -212,12 +212,8 @@ fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
     _ = C.XMapWindow(display, window);
     _ = C.XSetWindowBorderWidth(display, window, BORDER_WIDTH);
 
-    try addClient(allocator, window);
-
-    if (cursor) |node| {
-        //center(node);
-        focus(node);
-    }
+    const node = try addClient(allocator, window);
+    focus(node);
 }
 
 fn onUnmapNotify(allocator: std.mem.Allocator, e: *C.XEvent) void {
