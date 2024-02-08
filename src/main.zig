@@ -5,8 +5,6 @@ const FOCUS_BORDER_COLOR = 0xffd787;
 const NORMAL_BORDER_COLOR = 0x333333;
 const BORDER_WIDTH = 2;
 
-const Direction = enum { Previous, Next };
-
 // Keybinds, currently every key is directly under Mod4Mask but I will probably add
 // the ability to specify modifiers.
 const keys = [_]Key{
