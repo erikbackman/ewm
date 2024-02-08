@@ -5,6 +5,8 @@ const FOCUS_BORDER_COLOR = 0xffd787;
 const NORMAL_BORDER_COLOR = 0x333333;
 const BORDER_WIDTH = 2;
 
+const Direction = enum { Previous, Next };
+
 // Keybinds, currently every key is directly under Mod4Mask but I will probably add
 // the ability to specify modifiers.
 const keys = [_]Key{
@@ -319,20 +321,14 @@ fn quit() void {
 }
 
 fn winNext() void {
-    const c = cursor orelse return;
-    if (c.next) |next| {
-        focus(next);
-    } else if (list.first) |first| {
-        focus(first);
+    if (cursor) |c| {
+        if (c.next) |next| focus(next) else if (list.first) |first| focus(first);
     }
 }
 
 fn winPrev() void {
-    const c = cursor orelse return;
-    if (c.prev) |prev| {
-        focus(prev);
-    } else if (list.last) |last| {
-        focus(last);
+    if (cursor) |c| {
+        if (c.prev) |prev| focus(prev) else if (list.last) |last| focus(last);
     }
 }
 
