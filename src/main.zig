@@ -90,8 +90,8 @@ var winH: i32 = 0;
 
 var screenW: c_uint = 0;
 var screenH: c_uint = 0;
-var centerW: c_uint = 2752;
-var centerH: c_uint = 1400;
+var centerW: c_uint = 0;
+var centerH: c_uint = 0;
 
 var display: *C.Display = undefined;
 var root: C.Window = undefined;
@@ -416,6 +416,8 @@ pub fn main() !void {
     root = C.RootWindow(display, screen);
     screenW = @intCast(C.XDisplayWidth(display, screen));
     screenH = @intCast(C.XDisplayHeight(display, screen));
+    centerW = @divTrunc((4 * screenW), 5);
+    centerH = screenH - 40;
 
     _ = C.XSetErrorHandler(handleError);
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
