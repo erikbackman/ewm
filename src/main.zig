@@ -88,8 +88,8 @@ var winY: i32 = 0;
 var winW: i32 = 0;
 var winH: i32 = 0;
 
-var screenW: c_int = 0;
-var screenH: c_int = 0;
+var screenW: c_uint = 0;
+var screenH: c_uint = 0;
 var centerW: c_uint = 2752;
 var centerH: c_uint = 1400;
 
@@ -129,8 +129,11 @@ fn center(c: *L.Node) void {
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, c.data.w, &attributes);
 
-    c.data.wx = @divTrunc((screenW - attributes.width), 2);
-    c.data.wy = @divTrunc((screenH - attributes.height), 2);
+    const sw: c_int = @intCast(screenW);
+    const sh: c_int = @intCast(screenH);
+
+    c.data.wx = @divTrunc((sw - attributes.width), 2);
+    c.data.wy = @divTrunc((sh - attributes.height), 2);
     c.data.ww = attributes.width;
     c.data.wh = attributes.height;
 
@@ -351,7 +354,7 @@ fn tileCurrentRight() void {
         _ = C.XMoveResizeWindow(
             display,
             node.data.w,
-            @divTrunc(screenW, 2) + 2,
+            @intCast((screenW / 2) + 2),
             0,
             @as(c_uint, @intCast(@divTrunc(screenW, 2))),
             @intCast(screenH),
@@ -360,21 +363,19 @@ fn tileCurrentRight() void {
 }
 
 fn tileAll() void {
-    var next = list.first;
-    const count = list.len - 1;
-    const h: c_uint = @intCast(1440 / count);
-    var attr: C.XWindowAttributes = undefined;
+    const vert_split_height: c_uint = @intCast(screenH / (list.len - 1));
+
     var i: c_uint = 0;
+    var next = list.first;
     while (next) |node| : (next = node.next) {
         if (node.data.w != cursor.?.data.w) {
-            _ = C.XGetWindowAttributes(display, node.data.w, &attr);
             _ = C.XMoveResizeWindow(
                 display,
                 node.data.w,
                 0,
-                @intCast(i * h),
+                @intCast(i * vert_split_height),
                 @as(c_uint, @intCast(@divTrunc(screenW, 2) - 2)),
-                h,
+                vert_split_height,
             );
             i += 1;
         }
