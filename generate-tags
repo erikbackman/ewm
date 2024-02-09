@@ -1,0 +1,3 @@
+#!/usr/bin/sh
+
+ctags -e -R --language-force=zig --exclude=zig-cache
