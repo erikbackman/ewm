@@ -394,6 +394,11 @@ fn winFullscreen() void {
         if (!c.full) {
             var attributes: C.XWindowAttributes = undefined;
             _ = C.XGetWindowAttributes(display, c.w, &attributes);
+            node.data.wx = attributes.x;
+            node.data.wy = attributes.y;
+            node.data.ww = attributes.width;
+            node.data.wh = attributes.height;
+
             _ = C.XMoveResizeWindow(display, c.w, 0, 0, screenW, screenH);
             node.data.full = true;
         } else {
