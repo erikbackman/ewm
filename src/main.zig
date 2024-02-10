@@ -344,7 +344,7 @@ fn tileCurrentLeft() void {
             0,
             0,
             screenW / 2,
-            screenH,
+            screenH - 3 * BORDER_WIDTH,
         );
     }
 }
@@ -356,14 +356,14 @@ fn tileCurrentRight() void {
             node.data.w,
             @intCast((screenW / 2) + 2),
             0,
-            screenW / 2,
-            screenH,
+            (screenW / 2) - (3 * BORDER_WIDTH),
+            screenH - (3 * BORDER_WIDTH),
         );
     }
 }
 
 fn tileAll() void {
-    const vert_split_height: c_uint = @intCast(screenH / (list.len - 1));
+    const vert_split_height: c_uint = @intCast(screenH - 3 * BORDER_WIDTH / (list.len - 1));
 
     var i: c_uint = 0;
     var next = list.first;
@@ -399,7 +399,7 @@ fn winFullscreen() void {
             node.data.ww = attributes.width;
             node.data.wh = attributes.height;
 
-            _ = C.XMoveResizeWindow(display, c.w, 0, 0, screenW, screenH);
+            _ = C.XMoveResizeWindow(display, c.w, 0 + BORDER_WIDTH, 0 + BORDER_WIDTH, screenW - 3 * BORDER_WIDTH, screenH - 3 * BORDER_WIDTH);
             node.data.full = true;
         } else {
             _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
