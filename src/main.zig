@@ -363,7 +363,7 @@ fn tileCurrentRight() void {
 }
 
 fn tileAll() void {
-    const vert_split_height: c_uint = @intCast(screenH - 3 * BORDER_WIDTH / (list.len - 1));
+    const vert_split_height: c_uint = @intCast((screenH - 3 * BORDER_WIDTH) / (list.len - 1));
 
     var i: c_uint = 0;
     var next = list.first;
