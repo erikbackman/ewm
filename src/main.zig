@@ -432,8 +432,7 @@ pub fn main() !void {
     grabInput(root);
     keyMap = initKeyMap(allocator) catch @panic("failed to init keymap");
 
-    while (true) {
-        if (shouldQuit) break;
+    while (!shouldQuit) {
         _ = C.XNextEvent(display, &event);
 
         switch (event.type) {
