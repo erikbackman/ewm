@@ -69,7 +69,7 @@ fn grabInput(window: C.Window) void {
     }
 }
 
-// Global application state
+// Application state
 const Client = struct {
     full: bool,
     wx: c_int,
