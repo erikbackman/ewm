@@ -83,20 +83,20 @@ var shouldQuit = false;
 
 // Primarly used to store window attributes when a window is being
 // clicked on before we start potentially moving/resizing it.
-var winX: i32 = 0;
-var winY: i32 = 0;
-var winW: i32 = 0;
-var winH: i32 = 0;
+var win_x: i32 = 0;
+var win_y: i32 = 0;
+var win_w: i32 = 0;
+var win_h: i32 = 0;
 
-var screenW: c_uint = 0;
-var screenH: c_uint = 0;
-var centerW: c_uint = 0;
-var centerH: c_uint = 0;
+var screen_w: c_uint = 0;
+var screen_h: c_uint = 0;
+var center_w: c_uint = 0;
+var center_h: c_uint = 0;
 
 var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
-var windowChanges: C.XWindowChanges = undefined;
+var window_changes: C.XWindowChanges = undefined;
 
 // Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
@@ -125,12 +125,12 @@ fn addClient(allocator: std.mem.Allocator, window: C.Window) !*L.Node {
 }
 
 fn center(c: *L.Node) void {
-    _ = C.XResizeWindow(display, c.data.w, centerW, centerH);
+    _ = C.XResizeWindow(display, c.data.w, center_w, center_h);
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, c.data.w, &attributes);
 
-    const sw: c_int = @intCast(screenW);
-    const sh: c_int = @intCast(screenH);
+    const sw: c_int = @intCast(screen_w);
+    const sh: c_int = @intCast(screen_h);
 
     c.data.wx = @divTrunc((sw - attributes.width), 2);
     c.data.wy = @divTrunc((sh - attributes.height), 2);
@@ -195,15 +195,15 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
 
 // Event handlers
 fn onConfigureRequest(e: *C.XConfigureRequestEvent) void {
-    windowChanges.x = e.x;
-    windowChanges.y = e.y;
-    windowChanges.width = e.width;
-    windowChanges.height = e.height;
-    windowChanges.border_width = e.border_width;
-    windowChanges.sibling = e.above;
-    windowChanges.stack_mode = e.detail;
+    window_changes.x = e.x;
+    window_changes.y = e.y;
+    window_changes.width = e.width;
+    window_changes.height = e.height;
+    window_changes.border_width = e.border_width;
+    window_changes.sibling = e.above;
+    window_changes.stack_mode = e.detail;
 
-    _ = C.XConfigureWindow(display, e.window, @intCast(e.value_mask), &windowChanges);
+    _ = C.XConfigureWindow(display, e.window, @intCast(e.value_mask), &window_changes);
 }
 
 fn onMapRequest(allocator: std.mem.Allocator, event: *C.XEvent) !void {
@@ -239,10 +239,10 @@ fn onNotifyEnter(e: *C.XEvent) void {
 fn updateWindowAttribute(window: C.Window) void {
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, window, &attributes);
-    winW = attributes.width;
-    winH = attributes.height;
-    winX = attributes.x;
-    winY = attributes.y;
+    win_w = attributes.width;
+    win_h = attributes.height;
+    win_x = attributes.x;
+    win_y = attributes.y;
 }
 
 fn onButtonPress(e: *C.XEvent) void {
@@ -265,10 +265,10 @@ fn onNotifyMotion(e: *C.XEvent) void {
     _ = C.XMoveResizeWindow(
         display,
         mouse.subwindow,
-        winX + if (button == 1) dx else 0,
-        winY + if (button == 1) dy else 0,
-        @max(10, winW + if (button == 3) dx else 0),
-        @max(10, winH + if (button == 3) dy else 0),
+        win_x + if (button == 1) dx else 0,
+        win_y + if (button == 1) dy else 0,
+        @max(10, win_w + if (button == 3) dx else 0),
+        @max(10, win_h + if (button == 3) dy else 0),
     );
 }
 
@@ -343,8 +343,8 @@ fn tileCurrentLeft() void {
             node.data.w,
             0,
             0,
-            screenW / 2,
-            screenH - 3 * BORDER_WIDTH,
+            screen_w / 2,
+            screen_h - 3 * BORDER_WIDTH,
         );
     }
 }
@@ -354,17 +354,17 @@ fn tileCurrentRight() void {
         _ = C.XMoveResizeWindow(
             display,
             node.data.w,
-            @intCast((screenW / 2) + 2),
+            @intCast((screen_w / 2) + 2),
             0,
-            (screenW / 2) - (3 * BORDER_WIDTH),
-            screenH - (3 * BORDER_WIDTH),
+            (screen_w / 2) - (3 * BORDER_WIDTH),
+            screen_h - (3 * BORDER_WIDTH),
         );
     }
 }
 
 fn tileAll() void {
     if (list.len < 2) return;
-    const vert_split_height: c_uint = @intCast((screenH - 3 * BORDER_WIDTH) / (list.len - 1));
+    const vert_split_height: c_uint = @intCast((screen_h - 3 * BORDER_WIDTH) / (list.len - 1));
 
     var i: c_uint = 0;
     var next = list.first;
@@ -375,7 +375,7 @@ fn tileAll() void {
                 node.data.w,
                 0,
                 @intCast(i * vert_split_height),
-                (screenW / 2) - 2,
+                (screen_w / 2) - 2,
                 vert_split_height,
             );
             i += 1;
@@ -400,7 +400,7 @@ fn winFullscreen() void {
             node.data.ww = attributes.width;
             node.data.wh = attributes.height;
 
-            _ = C.XMoveResizeWindow(display, c.w, 0 + BORDER_WIDTH, 0 + BORDER_WIDTH, screenW - 3 * BORDER_WIDTH, screenH - 3 * BORDER_WIDTH);
+            _ = C.XMoveResizeWindow(display, c.w, 0 + BORDER_WIDTH, 0 + BORDER_WIDTH, screen_w - 3 * BORDER_WIDTH, screen_h - 3 * BORDER_WIDTH);
             node.data.full = true;
         } else {
             _ = C.XMoveResizeWindow(display, c.w, c.wx, c.wy, @as(c_uint, @intCast(c.ww)), @as(c_uint, @intCast(c.wh)));
@@ -420,10 +420,10 @@ pub fn main() !void {
 
     const screen = C.DefaultScreen(display);
     root = C.RootWindow(display, screen);
-    screenW = @intCast(C.XDisplayWidth(display, screen));
-    screenH = @intCast(C.XDisplayHeight(display, screen));
-    centerW = @divTrunc((4 * screenW), 5);
-    centerH = screenH - 40;
+    screen_w = @intCast(C.XDisplayWidth(display, screen));
+    screen_h = @intCast(C.XDisplayHeight(display, screen));
+    center_w = @divTrunc((4 * screen_w), 5);
+    center_h = screen_h - 40;
 
     _ = C.XSetErrorHandler(handleError);
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
