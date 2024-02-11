@@ -27,7 +27,7 @@ const Key = struct {
 // Generate a keymap with key: keysym and value: function pointer,
 // this is to avoid having to define keys to grab and then having to add same
 // keys to be handled in keypress handling code.
-var keyMap: std.AutoHashMap(c_uint, *const fn () void) = undefined;
+var keymap: std.AutoHashMap(c_uint, *const fn () void) = undefined;
 
 fn initKeyMap(allocator: std.mem.Allocator) !std.AutoHashMap(c_uint, *const fn () void) {
     var map = std.AutoHashMap(c_uint, *const fn () void).init(allocator);
@@ -229,7 +229,7 @@ fn onUnmapNotify(allocator: std.mem.Allocator, e: *C.XEvent) void {
 }
 
 fn onKeyPress(e: *C.XEvent) void {
-    if (keyMap.get(e.xkey.keycode)) |action| action();
+    if (keymap.get(e.xkey.keycode)) |action| action();
 }
 
 fn onNotifyEnter(e: *C.XEvent) void {
@@ -430,7 +430,7 @@ pub fn main() !void {
     _ = C.XDefineCursor(display, root, C.XCreateFontCursor(display, 68));
 
     grabInput(root);
-    keyMap = initKeyMap(allocator) catch @panic("failed to init keymap");
+    keymap = initKeyMap(allocator) catch @panic("failed to init keymap");
 
     while (!shouldQuit) {
         _ = C.XNextEvent(display, &event);
