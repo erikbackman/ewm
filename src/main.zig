@@ -236,7 +236,7 @@ fn onNotifyEnter(e: *C.XEvent) void {
     while (C.XCheckTypedEvent(display, C.EnterNotify, e)) {}
 }
 
-fn updateWindowAttribute(window: C.Window) void {
+fn updateWindowAttributes(window: C.Window) void {
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, window, &attributes);
     win_w = attributes.width;
@@ -247,7 +247,7 @@ fn updateWindowAttribute(window: C.Window) void {
 
 fn onButtonPress(e: *C.XEvent) void {
     if (e.xbutton.subwindow == 0) return;
-    updateWindowAttribute(e.xbutton.subwindow);
+    updateWindowAttributes(e.xbutton.subwindow);
     if (winToNode(e.xbutton.subwindow)) |node| focus(node);
     mouse = e.xbutton;
 }
