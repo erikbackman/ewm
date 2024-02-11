@@ -19,7 +19,7 @@ easier to just write a window manager that just does the thing.
 - It does what I want
 - No configuration
 - Floating
-- Psuedo Tiling
+- Pseudo Tiling
 
 ## Keybinds
 
