@@ -180,17 +180,19 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
         _ = C.XSetErrorHandler(handleError);
         _ = C.XUngrabServer(display);
     }
-    if (node == cursor) {
-        cursor = node.prev;
-    }
+    if (node == cursor) cursor = node.prev;
+
     list.remove(node);
     allocator.destroy(node);
-    _ = C.XSetInputFocus(
-        display,
-        root,
-        C.RevertToPointerRoot,
-        C.CurrentTime,
-    );
+
+    if (cursor) |c| focus(c) else {
+        _ = C.XSetInputFocus(
+            display,
+            root,
+            C.RevertToPointerRoot,
+            C.CurrentTime,
+        );
+    }
 }
 
 // Event handlers
