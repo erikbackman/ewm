@@ -438,9 +438,7 @@ pub fn main() !void {
     grabInput(root);
     keymap = initKeyMap(allocator) catch @panic("failed to init keymap");
 
-    while (!shouldQuit) {
-        _ = C.XNextEvent(display, &event);
-
+    while (!shouldQuit and C.XNextEvent(display, &event) == 0) {
         switch (event.type) {
             C.MapRequest => try onMapRequest(allocator, &event),
             C.UnmapNotify => onUnmapNotify(allocator, &event),
