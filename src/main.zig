@@ -445,6 +445,7 @@ pub fn main() !void {
     grabInput(root);
     keymap = initKeyMap(allocator) catch @panic("failed to init keymap");
 
+    _ = C.XSync(display, 0);
     while (!shouldQuit and C.XNextEvent(display, &event) == 0) {
         switch (event.type) {
             C.MapRequest => try onMapRequest(allocator, &event),
