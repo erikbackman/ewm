@@ -97,7 +97,6 @@ var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
 var window_changes: C.XWindowChanges = undefined;
-var previously_focused: ?*L.Node = undefined;
 
 // Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
@@ -150,7 +149,6 @@ fn focus(node: *L.Node) void {
     if (list.len == 0) return;
     if (cursor) |c| {
         _ = C.XSetWindowBorder(display, c.data.w, NORMAL_BORDER_COLOR);
-        previously_focused = c;
     }
 
     _ = C.XSetInputFocus(
@@ -189,7 +187,7 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
     list.remove(node);
     allocator.destroy(node);
 
-    if (previously_focused) |c| focus(c) else {
+    if (cursor) |c| focus(c) else {
         _ = C.XSetInputFocus(
             display,
             root,
