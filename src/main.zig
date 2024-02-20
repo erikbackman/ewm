@@ -97,6 +97,9 @@ var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
 var window_changes: C.XWindowChanges = undefined;
+// IMPROVE: Keeping a pointer to previously_focused window as the previs node in the window list
+// may or may not be the previously focused one.
+var previously_focused: ?*L.Node = undefined;
 
 // Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
@@ -157,9 +160,11 @@ fn focus(node: *L.Node) void {
         C.RevertToParent,
         C.CurrentTime,
     );
+
     _ = C.XRaiseWindow(display, node.data.w);
     _ = C.XSetWindowBorder(display, node.data.w, FOCUS_BORDER_COLOR);
 
+    previously_focused = cursor;
     cursor = node;
 }
 
@@ -183,11 +188,12 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
         _ = C.XUngrabServer(display);
     }
     if (node == cursor) cursor = node.prev;
-
-    list.remove(node);
-    allocator.destroy(node);
-
-    if (cursor) |c| focus(c) else {
+    // IMPROVE: There is no way of determining if a window is still alive so we have to make sure we set
+    // previously_focused to null if we destroy it. Another way is to set an error handler to handle
+    // BadWindow errors if we ever try to access it.
+    if (previously_focused) |pf| {
+        if (pf.data.w == node.data.w) previously_focused = null;
+    } else {
         _ = C.XSetInputFocus(
             display,
             root,
@@ -195,6 +201,9 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
             C.CurrentTime,
         );
     }
+
+    list.remove(node);
+    allocator.destroy(node);
 }
 
 // Event handlers
