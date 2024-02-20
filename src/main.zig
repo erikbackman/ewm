@@ -299,7 +299,7 @@ fn onButtonRelease(_: *C.XEvent) void {
 // Error handlers
 fn handleError(_: ?*C.Display, event: [*c]C.XErrorEvent) callconv(.C) c_int {
     const evt: *C.XErrorEvent = @ptrCast(event);
-
+    // TODO:
     switch (evt.error_code) {
         C.BadMatch => logError("BadMatch"),
         C.BadWindow => logError("BadWindow"),
