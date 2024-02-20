@@ -428,8 +428,8 @@ pub fn main() !void {
     root = C.RootWindow(display, screen);
     screen_w = @intCast(C.XDisplayWidth(display, screen));
     screen_h = @intCast(C.XDisplayHeight(display, screen));
-    center_w = @divTrunc((4 * screen_w), 5);
-    center_h = screen_h - 40;
+    center_w = @divTrunc((3 * screen_w), 5);
+    center_h = screen_h - 20;
 
     _ = C.XSetErrorHandler(handleError);
     _ = C.XSelectInput(display, root, C.SubstructureRedirectMask);
