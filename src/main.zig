@@ -193,7 +193,9 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
     // IMPROVE: There is no way of determining if a window is still alive so we have to make sure we set
     // previously_focused to null if we destroy it. Another way is to set an error handler to handle
     // BadWindow errors if we ever try to access it.
-    if (node.data.w == previously_focused.?.data.w) previously_focused = null;
+    if (previously_focused) |pf| {
+        if (node.data.w == pf.data.w) previously_focused = null;
+    }
 
     _ = C.XSetInputFocus(
         display,
