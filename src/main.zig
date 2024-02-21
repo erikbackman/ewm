@@ -97,14 +97,15 @@ var display: *C.Display = undefined;
 var root: C.Window = undefined;
 var mouse: C.XButtonEvent = undefined;
 var window_changes: C.XWindowChanges = undefined;
-// IMPROVE: Keeping a pointer to previously_focused window as the previs node in the window list
-// may or may not be the previously focused one.
-var previously_focused: ?*L.Node = undefined;
 
 // Clients are kept in a doubly-linked list
 const L = std.DoublyLinkedList(Client);
 var list = L{};
 var cursor: ?*L.Node = null; // having the cursor be nullable is annoying..
+
+// IMPROVE: Keeping a pointer to previously_focused window as the previs node in the window list
+// may or may not be the previously focused one.
+var previously_focused: ?*L.Node = undefined;
 
 fn addClient(allocator: std.mem.Allocator, window: C.Window) !*L.Node {
     var attributes: C.XWindowAttributes = undefined;
