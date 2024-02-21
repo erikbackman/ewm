@@ -148,24 +148,25 @@ fn center(c: *L.Node) void {
     );
 }
 
-fn focus(node: *L.Node) void {
+// IMPROVE: node is optional so that we don't have to do focusing logic in other places.
+fn focus(node: ?*L.Node) void {
     if (list.len == 0) return;
-    if (cursor) |c| {
-        _ = C.XSetWindowBorder(display, c.data.w, NORMAL_BORDER_COLOR);
-    }
+    if (cursor) |c| _ = C.XSetWindowBorder(display, c.data.w, NORMAL_BORDER_COLOR);
+
+    // IMPROVE: trying to do the most sensible thing here
+    const target = node orelse previously_focused orelse list.first.?;
+    previously_focused = cursor;
 
     _ = C.XSetInputFocus(
         display,
-        node.data.w,
+        target.data.w,
         C.RevertToParent,
         C.CurrentTime,
     );
+    _ = C.XRaiseWindow(display, target.data.w);
+    _ = C.XSetWindowBorder(display, target.data.w, FOCUS_BORDER_COLOR);
 
-    _ = C.XRaiseWindow(display, node.data.w);
-    _ = C.XSetWindowBorder(display, node.data.w, FOCUS_BORDER_COLOR);
-
-    previously_focused = cursor;
-    cursor = node;
+    cursor = target;
 }
 
 // Utils
@@ -191,19 +192,19 @@ fn unmanage(allocator: std.mem.Allocator, node: *L.Node, destroyed: bool) void {
     // IMPROVE: There is no way of determining if a window is still alive so we have to make sure we set
     // previously_focused to null if we destroy it. Another way is to set an error handler to handle
     // BadWindow errors if we ever try to access it.
-    if (previously_focused) |pf| {
-        if (pf.data.w == node.data.w) previously_focused = null;
-    } else {
-        _ = C.XSetInputFocus(
-            display,
-            root,
-            C.RevertToPointerRoot,
-            C.CurrentTime,
-        );
-    }
+    if (node.data.w == previously_focused.?.data.w) previously_focused = null;
+
+    _ = C.XSetInputFocus(
+        display,
+        root,
+        C.RevertToPointerRoot,
+        C.CurrentTime,
+    );
+    _ = C.XDeleteProperty(display, root, C.XInternAtom(display, "_NET_ACTIVE_WINDOW", 0));
 
     list.remove(node);
     allocator.destroy(node);
+    focus(null);
 }
 
 // Event handlers
