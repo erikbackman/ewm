@@ -352,9 +352,6 @@ fn centerCurrent() void {
 
 fn tileCurrentLeft() void {
     if (cursor) |node| {
-        var attributes: C.XWindowAttributes = undefined;
-        _ = C.XGetWindowAttributes(display, node.data.w, &attributes);
-
         _ = C.XMoveResizeWindow(
             display,
             node.data.w,
