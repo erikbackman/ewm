@@ -238,7 +238,21 @@ fn onUnmapNotify(allocator: std.mem.Allocator, e: *C.XEvent) void {
     const ev = &e.xunmap;
     if (winToNode(ev.window)) |node| {
         if (ev.send_event == 1) {
-            // TODO: handle this
+            // INVESTIGATE: Is this what we want to do?
+            const data = [_]c_long{ C.WithdrawnState, C.None };
+            // Data Format: Specifies whether the  data should be viewed  as a list
+            // of  8-bit,  16-bit,  or  32-bit  quantities.
+            const data_format = 32;
+            _ = C.XChangeProperty(
+                display,
+                node.data.w,
+                C.XInternAtom(display, "WM_STATE", 0),
+                C.XInternAtom(display, "WM_STATE", 0),
+                data_format,
+                C.PropModeReplace,
+                @ptrCast(&data),
+                data.len,
+            );
         } else {
             unmanage(allocator, node, false);
         }
