@@ -104,7 +104,7 @@ var list = L{};
 var cursor: ?*L.Node = null; // having the cursor be nullable is annoying..
 
 // IMPROVE: Keeping a pointer to previously_focused window as the previs node in the window list
-// may or may not be the previously focused one.
+// may or may not be the previously focused one -- because a circular dl list is used.
 var previously_focused: ?*L.Node = undefined;
 
 fn addClient(allocator: std.mem.Allocator, window: C.Window) !*L.Node {
