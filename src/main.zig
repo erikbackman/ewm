@@ -270,7 +270,7 @@ fn onNotifyEnter(e: *C.XEvent) void {
 fn onButtonPress(e: *C.XEvent) void {
     if (e.xbutton.subwindow == 0) return;
     var attributes: C.XWindowAttributes = undefined;
-    _ = C.XGetWindowAttributes(display, window, &attributes);
+    _ = C.XGetWindowAttributes(display, e.xbutton.subwindow, &attributes);
     win_w = attributes.width;
     win_h = attributes.height;
     win_x = attributes.x;
