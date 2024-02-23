@@ -267,18 +267,14 @@ fn onNotifyEnter(e: *C.XEvent) void {
     while (C.XCheckTypedEvent(display, C.EnterNotify, e)) {}
 }
 
-fn updateWindowAttributes(window: C.Window) void {
+fn onButtonPress(e: *C.XEvent) void {
+    if (e.xbutton.subwindow == 0) return;
     var attributes: C.XWindowAttributes = undefined;
     _ = C.XGetWindowAttributes(display, window, &attributes);
     win_w = attributes.width;
     win_h = attributes.height;
     win_x = attributes.x;
     win_y = attributes.y;
-}
-
-fn onButtonPress(e: *C.XEvent) void {
-    if (e.xbutton.subwindow == 0) return;
-    updateWindowAttributes(e.xbutton.subwindow);
     if (winToNode(e.xbutton.subwindow)) |node| focus(node);
     mouse = e.xbutton;
 }
@@ -349,15 +345,11 @@ fn quit() void {
 }
 
 fn winNext() void {
-    if (cursor) |c| {
-        if (c.next) |next| focus(next) else if (list.first) |first| focus(first);
-    }
+    if (cursor.?.next) |next| focus(next) else if (list.first) |first| focus(first);
 }
 
 fn winPrev() void {
-    if (cursor) |c| {
-        if (c.prev) |prev| focus(prev) else if (list.last) |last| focus(last);
-    }
+    if (cursor.?.prev) |prev| focus(prev) else if (list.last) |last| focus(last);
 }
 
 fn centerCurrent() void {
