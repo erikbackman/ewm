@@ -275,8 +275,9 @@ fn onButtonPress(e: *C.XEvent) void {
     win_h = attributes.height;
     win_x = attributes.x;
     win_y = attributes.y;
-    if (winToNode(e.xbutton.subwindow)) |node| focus(node);
     mouse = e.xbutton;
+
+    if (winToNode(e.xbutton.subwindow)) |node| if (node != cursor) focus(node);
 }
 
 fn onNotifyMotion(e: *C.XEvent) void {
