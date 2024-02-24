@@ -42,31 +42,12 @@ fn grabInput(window: C.Window) void {
     _ = C.XUngrabKey(display, C.AnyKey, C.AnyModifier, root);
 
     for (keys) |key| {
-        _ = C.XGrabKey(
-            display,
-            C.XKeysymToKeycode(display, key.keysym),
-            C.Mod4Mask,
-            window,
-            0,
-            C.GrabModeAsync,
-            C.GrabModeAsync,
-        );
+        _ = C.XGrabKey(display, C.XKeysymToKeycode(display, key.keysym), C.Mod4Mask, window, 0, C.GrabModeAsync, C.GrabModeAsync);
     }
-
     for ([_]u8{ 1, 3 }) |btn| {
-        _ = C.XGrabButton(
-            display,
-            btn,
-            C.Mod4Mask,
-            root,
-            0,
-            C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask,
-            C.GrabModeAsync,
-            C.GrabModeAsync,
-            0,
-            0,
-        );
+        _ = C.XGrabButton(display, btn, C.Mod4Mask, root, 0, C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask, C.GrabModeAsync, C.GrabModeAsync, 0, 0);
     }
+    _ = C.XGrabButton(display, 1, 0, root, 0, C.ButtonPressMask | C.ButtonReleaseMask, C.GrabModeSync, C.GrabModeAsync, 0, 0);
 }
 
 // Application state
@@ -278,6 +259,8 @@ fn onButtonPress(e: *C.XEvent) void {
     mouse = e.xbutton;
 
     if (winToNode(e.xbutton.subwindow)) |node| if (node != cursor) focus(node);
+    _ = C.XAllowEvents(display, C.ReplayPointer, e.xbutton.time);
+    _ = C.XSync(display, 0);
 }
 
 fn onNotifyMotion(e: *C.XEvent) void {
