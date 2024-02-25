@@ -329,11 +329,15 @@ fn quit() void {
 }
 
 fn winNext() void {
-    if (cursor.?.next) |next| focus(next) else if (list.first) |first| focus(first);
+    if (cursor) |c| {
+        if (c.next) |next| focus(next) else if (list.first) |first| focus(first);
+    }
 }
 
 fn winPrev() void {
-    if (cursor.?.prev) |prev| focus(prev) else if (list.last) |last| focus(last);
+    if (cursor) |c| {
+        if (c.prev) |prev| focus(prev) else if (list.last) |last| focus(last);
+    }
 }
 
 fn centerCurrent() void {
