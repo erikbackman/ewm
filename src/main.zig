@@ -47,7 +47,6 @@ fn grabInput(window: C.Window) void {
     for ([_]u8{ 1, 3 }) |btn| {
         _ = C.XGrabButton(display, btn, C.Mod4Mask, root, 0, C.ButtonPressMask | C.ButtonReleaseMask | C.PointerMotionMask, C.GrabModeAsync, C.GrabModeAsync, 0, 0);
     }
-    _ = C.XGrabButton(display, 1, 0, root, 0, C.ButtonPressMask | C.ButtonReleaseMask, C.GrabModeSync, C.GrabModeAsync, 0, 0);
 }
 
 // Application state
@@ -258,15 +257,13 @@ fn onButtonPress(e: *C.XEvent) void {
     win_y = attributes.y;
     mouse = e.xbutton;
 
-    if (winToNode(e.xbutton.subwindow)) |node| if (node != cursor) focus(node);
-    _ = C.XAllowEvents(display, C.ReplayPointer, e.xbutton.time);
-    _ = C.XSync(display, 0);
+    if (winToNode(e.xbutton.subwindow)) |node| if (node != cursor) {
+        focus(node);
+    };
 }
 
 fn onNotifyMotion(e: *C.XEvent) void {
     if (mouse.subwindow == 0) return;
-
-    while (C.XCheckTypedEvent(display, C.MotionNotify, e) == @as(c_int, @intCast(1))) {}
 
     const dx: i32 = @intCast(e.xbutton.x_root - mouse.x_root);
     const dy: i32 = @intCast(e.xbutton.y_root - mouse.y_root);
